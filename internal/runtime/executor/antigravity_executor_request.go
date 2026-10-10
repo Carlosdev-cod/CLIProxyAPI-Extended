@@ -460,7 +460,12 @@ func resolveCustomAntigravityBaseURL(auth *cliproxyauth.Auth) string {
 
 func geminiToAntigravity(modelName string, payload []byte, projectID string, derivedSessionIDs ...string) []byte {
 	template := payload
-	template = helps.SetStringIfDifferent(template, "model", modelName)
+	// Upstream Antigravity exposes reasoning tiers as "<base>-<level>" model
+	// ids. Clients request the canonical base id and select the tier via
+	// thinking parameters, so map the resolved thinkingLevel back onto the
+	// upstream id here at the final payload barrier.
+	upstreamModel := helps.AntigravityUpstreamModelID(modelName, gjson.GetBytes(template, "request.generationConfig.thinkingConfig.thinkingLevel").String())
+	template = helps.SetStringIfDifferent(template, "model", upstreamModel)
 	template = helps.SetStringIfDifferent(template, "userAgent", "antigravity")
 
 	isImageModel := strings.Contains(modelName, "image")

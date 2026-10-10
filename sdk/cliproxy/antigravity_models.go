@@ -358,10 +358,16 @@ func parseAntigravityModelCapabilityHints(body []byte) (antigravityModelCapabili
 	}
 	var modelIDs map[string]struct{}
 	if parsed.Models != nil {
-		modelIDs = make(map[string]struct{}, len(parsed.Models))
+		modelIDs = make(map[string]struct{}, len(parsed.Models)*2)
 		for id := range parsed.Models {
 			if normalized := normalizeAntigravityFetchedModelID(id); normalized != "" {
 				modelIDs[normalized] = struct{}{}
+				// Upstream exposes reasoning tiers as "<base>-<level>" ids.
+				// Register the canonical base id too so clients can select the
+				// tier via thinking parameters instead of suffixed model names.
+				if canonical := stripAntigravityTierSuffix(normalized); canonical != normalized && canonical != "" {
+					modelIDs[canonical] = struct{}{}
+				}
 			}
 		}
 	}
@@ -387,6 +393,22 @@ func applyAntigravityFetchedModelCapabilities(models []*ModelInfo, hints antigra
 
 func normalizeAntigravityFetchedModelID(modelID string) string {
 	return strings.ToLower(strings.TrimSpace(modelID))
+}
+
+// antigravityTierSuffixes are reasoning-effort tiers upstream exposes as
+// model id suffixes. Longest first so "-extra-low" is not trimmed as "-low".
+var antigravityTierSuffixes = []string{"-extra-low", "-tiered", "-medium", "-high", "-low"}
+
+// stripAntigravityTierSuffix removes a trailing reasoning-tier suffix,
+// returning the canonical base model id. Ids without a tier suffix are
+// returned unchanged.
+func stripAntigravityTierSuffix(modelID string) string {
+	for _, suffix := range antigravityTierSuffixes {
+		if strings.HasSuffix(modelID, suffix) {
+			return strings.TrimSuffix(modelID, suffix)
+		}
+	}
+	return modelID
 }
 
 // WaitAntigravityProbes waits for any in-flight asynchronous Antigravity capability probes to complete.
